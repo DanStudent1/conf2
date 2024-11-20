@@ -41,8 +41,12 @@ def build_dependency_graph(repo_path, commits):
     return graph
 
 
+
 def save_graph(graph, output_path):
-    graph.render(output_path, cleanup=True)
+    directory = os.path.dirname(output_path)
+    if directory and not os.path.exists(directory):
+        os.makedirs(directory)
+    graph.render(output_path, view=False, format='png')
 
 def main(config_path):
     config = load_config(config_path)
