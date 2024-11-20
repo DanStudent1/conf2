@@ -10,23 +10,36 @@ def load_config(config_path):
         config = json.load(f)
     return config
 
-def get_commits(repo_path, date):
-    repo = Repo(repo_path)
-    commits = []
-    for commit in repo.iter_commits():
-        if commit.committed_datetime < datetime.datetime.strptime(date, '%Y-%m-%d'):
-            commits.append(commit)
+def get_commits(repo_path, until_date):
+    command = ['git', 'log', '--until={}'.format(until_date), '--pretty=format:%H']
+    result = subprocess.run(command, stdout=subprocess.PIPE, text=True, cwd=repo_path, check=True)
+    commits = result.stdout.strip().split('\n')
     return commits
 
-def build_dependency_graph(commits):
-    graph = Digraph(format='png')
+def get_commits_files(repo_path, commit_hash):
+    command = ['git', 'diff-tree', '--no-commit-id', '--name-only', '-r', commit_hash]
+    result = subprocess.run(command, stdout=subprocess.PIPE, text=True, cwd=repo_path)
+    files = result.stdout.strip().split('\n')
+    folders = set(os.path.dirname(f) for f in files if f)
+    return files, list(folders)
+
+
+def build_dependency_graph(repo_path, commits):
+    graph = Digraph(comment='Dependency Graph')
+    previous_commit = None
     for commit in commits:
-        files = commit.stats.files.keys()
-        label = f"Commit: {commit.hexsha[:7]}\n" + "\n".join(files)
-        graph.node(commit.hexsha, label=label)
-        for parent in commit.parents:
-            graph.edge(parent.hexsha, commit.hexsha)
+        files, folders = get_commit_files(repo_path, commit)
+        node_label = 'Commit: {}\nFiles:\n{}\nFolders:\n{}'.format(
+            commit,
+            '\n'.join(files),
+            '\n'.join(folders)
+        )
+        graph.node(commit, label=node_label)
+        if previous_commit:
+            graph.edge(previous_commit, commit)
+        previous_commit = commit
     return graph
+
 
 def save_graph(graph, output_path):
     graph.render(output_path, cleanup=True)
